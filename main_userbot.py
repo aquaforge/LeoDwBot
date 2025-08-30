@@ -77,17 +77,20 @@ async def save_file_if_not_exists(short_file_name: str, message: Message) -> Non
         await bot.download_media(message=message, file_name=full_file_name, progress=progress)
 
 
-@bot.on_message(filters.incoming | filters.private | filters.audio)
+@bot.on_message(filters.incoming & filters.private & filters.audio)
 async def save_audio(_, message: Message):
     try:
-        # print_message(message)
+        if message.chat.full_name != 'Ivan G':
+            print(f'WRONG CHAT {message.chat.full_name}')
+            return
+
         with Session(autoflush=False, bind=engine) as db:
             file_data = db.query(FilesData).filter(
                 FilesData.file_unique_id == message.audio.file_unique_id,
                 FilesData.user_id == message.from_user.id).first()
             if file_data is not None:
                 await save_file_if_not_exists(file_data.short_file_name, message)
-                await message.reply('exists')
+                await message.reply('exists', quote=True)
             else:
                 short_file_name = get_short_file_name(message)
                 if db.query(FilesData).filter(
@@ -117,26 +120,30 @@ async def save_audio(_, message: Message):
                 db.add(file_data)
                 db.commit()
 
-                await message.reply('saved')
+                await message.reply('saved', quote=True)
 
     except Exception as e:
         print(e)
-        await message.reply(f'ERROR\n{e}')
+        await message.reply(f'ERROR\n{e}', quote=True)
 
 
-# @bot.on_message(filters.private | filters.command(["start","list"]))
-# async def _(_, message: Message):
-#     with (Session(autoflush=False, bind=engine) as db):
-#         records = db.query(FilesData.short_file_name) \
-#             .where(FilesData.user_id == message.from_user.id) \
-#             .order_by(desc(FilesData.created_at))
-#
-#         files = [r.short_file_name for r in records]
-#         if not files:
-#             await message.reply("No files")
-#         else:
-#             large_text = f'Files ({len(files)}):\n{"\n".join(files)}'
-#             await message.reply(large_text[:3000])
+@bot.on_message(filters.incoming & filters.private & filters.command(["start", "list"]))
+async def _(_, message: Message):
+    with (Session(autoflush=False, bind=engine) as db):
+        if message.chat.full_name != 'Ivan G':
+            print(f'WRONG CHAT {message.chat.full_name}')
+            return
+
+        records = db.query(FilesData.short_file_name) \
+            .where(FilesData.user_id == message.from_user.id) \
+            .order_by(desc(FilesData.created_at))
+
+        files = [r.short_file_name for r in records]
+        if not files:
+            await message.reply("No files", quote=True)
+        else:
+            large_text = f'Files ({len(files)}):\n{"\n".join(files)}'
+            await message.reply(large_text[:3000], quote=True)
 
 
 # bot.run()
