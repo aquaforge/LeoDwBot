@@ -28,7 +28,7 @@ Base.metadata.create_all(engine)
 load_dotenv()
 TELEBOT_TOKEN = os.environ.get('TELEBOT_TOKEN', '')
 if TELEBOT_TOKEN == '':
-    print('\nERROR: TELEBOT_TOKEN NOT FOUND !!!')
+    print('\nERROR: TELEBOT_TOKEN or ".env" file NOT FOUND !!!')
     exit(1)
 
 bot: TeleBot = TeleBot(TELEBOT_TOKEN)
@@ -76,12 +76,27 @@ def _(message: Message):
             file_data = db.query(FilesData).filter(
                 FilesData.file_unique_id == message.audio.file_unique_id,
                 FilesData.user_id == message.from_user.id).first()
-            if file_data is None:
+            if file_data is not None:
+                save_file_if_not_exists(file_data.short_file_name, message)
+                bot.send_message(message.chat.id, 'exists',
+                                 reply_markup=markup, reply_to_message_id=message.id)
+            else:
                 short_file_name = get_short_file_name(message)
                 if db.query(FilesData).filter(
                         FilesData.short_file_name == short_file_name,
                         FilesData.user_id == message.from_user.id).first() is not None:
                     short_file_name = get_short_file_name(message, message.audio.file_unique_id)
+
+                now = datetime.now()
+                print('|'.join([f'{now.hour}:{now.minute}:{now.second}',
+                                'saving',
+                                str(message.from_user.id),
+                                message.audio.file_name,
+                                message.audio.mime_type,
+                                str(message.audio.duration),
+                                str(message.audio.file_size),
+                                short_file_name]))
+                save_file_if_not_exists(short_file_name, message)
 
                 file_data = FilesData()
                 file_data.user_id = message.from_user.id
@@ -94,36 +109,31 @@ def _(message: Message):
                 db.add(file_data)
                 db.commit()
 
-                now = datetime.now()
-                print('|'.join([f'{now.hour}:{now.minute}:{now.second}',
-                                str(file_data.user_id),
-                                file_data.file_name,
-                                file_data.mime_type,
-                                file_data.short_file_name]))
-            save_file_if_not_exists(file_data.short_file_name, message)
+                bot.send_message(message.chat.id, 'saved',
+                                 reply_markup=markup, reply_to_message_id=message.id)
 
     except Exception as e:
         print(e)
-        bot.send_message(message.chat.id, "error",
+        bot.send_message(message.chat.id, f'ERROR\n{e}',
                          reply_markup=markup, reply_to_message_id=message.id)
 
 
 def save_file_if_not_exists(short_file_name: str, message: Message) -> None:
-    try:
-        user_folder = get_user_folder(message)
-        Path(user_folder).mkdir(parents=True, exist_ok=True)
-        full_file_name = os.path.join(user_folder, short_file_name)
+    # try:
+    user_folder = get_user_folder(message)
+    Path(user_folder).mkdir(parents=True, exist_ok=True)
+    full_file_name = os.path.join(user_folder, short_file_name)
 
-        if not os.path.exists(full_file_name):
-            tg_file: File = bot.get_file(message.audio.file_id)
-            tg_file_path: str = tg_file.file_path or ''
-            if tg_file_path != '':
-                with open(full_file_name, 'wb') as new_file:
-                    new_file.write(bot.download_file(tg_file_path))
-    except IOError as e:
-        print(e)
-        bot.send_message(message.chat.id, "IO error",
-                         reply_markup=markup, reply_to_message_id=message.id)
+    if not os.path.exists(full_file_name):
+        tg_file: File = bot.get_file(message.audio.file_id)
+        tg_file_path: str = tg_file.file_path or ''
+        if tg_file_path != '':
+            with open(full_file_name, 'wb') as new_file:
+                new_file.write(bot.download_file(tg_file_path))
+    # except IOError as e:
+    #     print(e)
+    #     bot.send_message(message.chat.id, f'IO ERROR\n{e}',
+    #                      reply_markup=markup, reply_to_message_id=message.id)
 
 
 @bot.message_handler(commands=['start'])
@@ -133,16 +143,17 @@ def _(message: Message):
 
 @bot.message_handler(commands=['list'])
 def _(message: Message):
-    with Session(autoflush=False, bind=engine) as db:
-        file_data = db.query(FilesData.short_file_name).filter_by(
-            FilesData.user_id == message.from_user.id).order_by(desc(FilesData.created_at))
+    with (Session(autoflush=False, bind=engine) as db):
+        records = db.query(FilesData.short_file_name) \
+            .where(FilesData.user_id == message.from_user.id) \
+            .order_by(desc(FilesData.created_at))
 
-        if file_data is None:
+        files = [r.short_file_name for r in records]
+        if not files:
             bot.send_message(message.chat.id, "No files",
                              reply_markup=markup, reply_to_message_id=message.id)
         else:
-            files = [r.short_file_name for r in file_data]
-            large_text = f'Files({len(files)}):\n{"\n".join(files)}'
+            large_text = f'Files ({len(files)}):\n{"\n".join(files)}'
             for text in util.smart_split(large_text, chars_per_string=3000):
                 bot.send_message(message.chat.id, text,
                                  reply_markup=markup, reply_to_message_id=message.id)
