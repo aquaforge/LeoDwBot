@@ -137,8 +137,12 @@ async def save_if_audio(message: Message):
         await message.reply(f'ERROR\n{e}', quote=True)
 
 
-@bot.on_message(filters.incoming & filters.private & filters.command(["info", "list"]))
+@bot.on_message(filters.incoming & filters.private & (filters.command("info") | filters.text))
 async def _(_, message: Message):
+    if not (bool(message.text) and message.text in ['/info', 'info']):
+        print(f'message.text="{message.text}" : {message.chat.full_name}')
+        return
+
     with (Session(autoflush=False, bind=engine) as db):
         if message.chat.full_name != 'Ivan G':
             print(f'WRONG CHAT {message.chat.full_name}')
@@ -155,10 +159,11 @@ async def _(_, message: Message):
             large_text = f'Files ({len(files)}):\n{"\n".join(files)}'
             await message.reply(large_text[:3000], quote=True)
 
-    async for message in bot.get_chat_history(message.from_user.id):
-        await save_if_audio(message)
+    async for m in bot.get_chat_history(message.from_user.id):
+        await save_if_audio(m)
     print('chat_history checked')
-    await message.reply('All history checked', quote=True)
+    await message.reply('All chat history checked', quote=True)
+
 
 # bot.run()
 async def main():
