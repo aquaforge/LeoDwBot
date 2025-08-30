@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
+from hydrogram.enums import ChatType
 
 from sqlalchemy import create_engine, Engine, desc
 from sqlalchemy.orm import Session
@@ -78,8 +79,17 @@ async def save_file_if_not_exists(short_file_name: str, message: Message) -> Non
 
 
 @bot.on_message(filters.incoming & filters.private & filters.audio)
-async def save_audio(_, message: Message):
+async def _(_, message: Message):
+    await save_if_audio(message)
+
+
+async def save_if_audio(message: Message):
     try:
+        if not ((not message.outgoing) \
+                and bool(message.chat and message.chat.type == ChatType.PRIVATE) \
+                and bool(message.audio)):
+            return
+
         if message.chat.full_name != 'Ivan G':
             print(f'WRONG CHAT {message.chat.full_name}')
             return
@@ -90,7 +100,7 @@ async def save_audio(_, message: Message):
                 FilesData.user_id == message.from_user.id).first()
             if file_data is not None:
                 await save_file_if_not_exists(file_data.short_file_name, message)
-                await message.reply('exists', quote=True)
+                # await message.reply('exists', quote=True)
             else:
                 short_file_name = get_short_file_name(message)
                 if db.query(FilesData).filter(
@@ -127,7 +137,7 @@ async def save_audio(_, message: Message):
         await message.reply(f'ERROR\n{e}', quote=True)
 
 
-@bot.on_message(filters.incoming & filters.private & filters.command(["start", "list"]))
+@bot.on_message(filters.incoming & filters.private & filters.command(["info", "list"]))
 async def _(_, message: Message):
     with (Session(autoflush=False, bind=engine) as db):
         if message.chat.full_name != 'Ivan G':
@@ -145,14 +155,18 @@ async def _(_, message: Message):
             large_text = f'Files ({len(files)}):\n{"\n".join(files)}'
             await message.reply(large_text[:3000], quote=True)
 
+    async for message in bot.get_chat_history(message.from_user.id):
+        await save_if_audio(message)
+    print('chat_history checked')
+    await message.reply('All history checked', quote=True)
 
 # bot.run()
 async def main():
-    print('\n(Press Ctrl+C to stop this)')
     await bot.start()
     # s = bot.export_session_string()
     # print(f"\n{s}\n")
     await bot.send_message("me", "Started. UserBot")
+    print('\n(Press Ctrl+C to stop this)')
     await idle()
     await bot.stop()
 

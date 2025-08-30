@@ -78,8 +78,8 @@ def _(message: Message):
                 FilesData.user_id == message.from_user.id).first()
             if file_data is not None:
                 save_file_if_not_exists(file_data.short_file_name, message)
-                bot.send_message(message.chat.id, 'exists',
-                                 reply_markup=markup, reply_to_message_id=message.id)
+                # bot.send_message(message.chat.id, 'exists',
+                #                  reply_markup=markup, reply_to_message_id=message.id)
             else:
                 short_file_name = get_short_file_name(message)
                 if db.query(FilesData).filter(
