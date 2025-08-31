@@ -130,7 +130,7 @@ async def save_if_audio(message: Message):
                 db.add(file_data)
                 db.commit()
 
-                await message.reply(f'saved: {short_file_name}', quote=True)
+                await message.reply(f'saved: "{short_file_name}"', quote=True)
 
     except Exception as e:
         print(e)
@@ -161,13 +161,16 @@ async def _(_, message: Message):
 
 
 async def check_all_audio_data_chats_history():
-    with (Session(autoflush=False, bind=engine) as db):
-        user_ids = [r.user_id for r in db.query(FilesData.user_id).distinct().all()]
+    try:
+        with (Session(autoflush=False, bind=engine) as db):
+            user_ids = [r.user_id for r in db.query(FilesData.user_id).distinct().all()]
 
-    for user_id in user_ids:
-        async for m in bot.get_chat_history(user_id):
-            await save_if_audio(m)
-        print(f'chat_history checked: {user_id}')
+        for user_id in user_ids:
+            async for m in bot.get_chat_history(user_id):
+                await save_if_audio(m)
+            print(f'chat_history checked: {user_id}')
+    except Exception as e:
+        print(f'chat_history error: {user_id}: {e}')
 
 async def main():
     await bot.start()
