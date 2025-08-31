@@ -130,7 +130,7 @@ async def save_if_audio(message: Message):
                 db.add(file_data)
                 db.commit()
 
-                await message.reply('saved', quote=True)
+                await message.reply(f'saved: {short_file_name}', quote=True)
 
     except Exception as e:
         print(e)
@@ -139,7 +139,7 @@ async def save_if_audio(message: Message):
 
 @bot.on_message(filters.incoming & filters.private & (filters.command("info") | filters.text))
 async def _(_, message: Message):
-    if not (bool(message.text) and message.text in ['/info', 'info']):
+    if not (bool(message.text) and message.text.lower() in ['/info', 'info']):
         print(f'message.text="{message.text}" : {message.chat.full_name}')
         return
 
@@ -159,19 +159,23 @@ async def _(_, message: Message):
             large_text = f'Files ({len(files)}):\n{"\n".join(files)}'
             await message.reply(large_text[:3000], quote=True)
 
-    async for m in bot.get_chat_history(message.from_user.id):
-        await save_if_audio(m)
-    print('chat_history checked')
-    await message.reply('All chat history checked', quote=True)
 
+async def check_all_audio_data_chats_history():
+    with (Session(autoflush=False, bind=engine) as db):
+        user_ids = [r.user_id for r in db.query(FilesData.user_id).distinct().all()]
 
-# bot.run()
+    for user_id in user_ids:
+        async for m in bot.get_chat_history(user_id):
+            await save_if_audio(m)
+        print(f'chat_history checked: {user_id}')
+
 async def main():
     await bot.start()
     # s = bot.export_session_string()
     # print(f"\n{s}\n")
     await bot.send_message("me", "Started. UserBot")
     print('\n(Press Ctrl+C to stop this)')
+    await check_all_audio_data_chats_history()
     await idle()
     await bot.stop()
 
