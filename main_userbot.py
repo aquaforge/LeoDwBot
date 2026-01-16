@@ -18,7 +18,8 @@ WRONG_FILENAME_CHARS = '\\/*?:\'"'
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tmp')
 Path(DATA_DIR).mkdir(parents=True, exist_ok=True)
 
-engine: Engine = create_engine(f'sqlite:///{os.path.join(DATA_DIR, "files_data.sqlite")}')
+engine: Engine = create_engine(
+    f'sqlite:///{os.path.join(DATA_DIR, "files_data.sqlite")}')
 Base.metadata.create_all(engine)
 
 load_dotenv()
@@ -51,31 +52,31 @@ def clear_filename_chars(filename: str) -> str:
     return s
 
 
-def get_short_file_name(message: Message, suffix: str = '') -> str:
-    short_file_name = ' - '.join([message.audio.performer.strip(), message.audio.title.strip()])
-
-    suffix = suffix.strip()
-    if suffix != '': short_file_name += '_' + suffix
-
-    short_file_name = clear_filename_chars(short_file_name)
+def get_short_file_name(message: Message) -> str:
+    short_file_name = ' - '.join([str(x).strip() for x in [
+        message.audio.performer,
+        message.audio.title,
+        message.audio.file_name] if x])
 
     if short_file_name == '':
-        short_file_name = clear_filename_chars(message.audio.file_unique_id)
-    short_file_name += '.' + message.audio.file_name.split('.')[-1]
+        short_file_name = str(message.audio.file_unique_id).strip() + '.mp3'
+
+    short_file_name = clear_filename_chars(short_file_name)
+    print(short_file_name)
     return short_file_name
 
 
-async def progress(current, total):
-    print(f"{current * 100 / total:.1f}%")
-
+async def progress(current, total,file_name):
+    print(f"{file_name}: {current * 100 / total:.1f}%")
 
 async def save_file_if_not_exists(short_file_name: str, message: Message) -> None:
     user_folder = get_user_folder(message)
     Path(user_folder).mkdir(parents=True, exist_ok=True)
-    full_file_name = os.path.join(user_folder, short_file_name)
 
+    full_file_name = os.path.join(user_folder, short_file_name)
     if not os.path.exists(full_file_name):
-        await bot.download_media(message=message, file_name=full_file_name, progress=progress)
+        await bot.download_media(message=message, file_name=full_file_name, progress=progress, progress_args=(short_file_name,))
+        print(f"{short_file_name}: SAVED")
 
 
 @bot.on_message(filters.incoming & filters.private & filters.audio)
@@ -85,8 +86,8 @@ async def _(_, message: Message):
 
 async def save_if_audio(message: Message):
     try:
-        if not ((not message.outgoing) \
-                and bool(message.chat and message.chat.type == ChatType.PRIVATE) \
+        if not ((not message.outgoing)
+                and bool(message.chat and message.chat.type == ChatType.PRIVATE)
                 and bool(message.audio)):
             return
 
@@ -106,17 +107,22 @@ async def save_if_audio(message: Message):
                 if db.query(FilesData).filter(
                         FilesData.short_file_name == short_file_name,
                         FilesData.user_id == message.from_user.id).first() is not None:
-                    short_file_name = get_short_file_name(message, message.audio.file_unique_id)
+                    short_file_name = clear_filename_chars(
+                        # есть дубль, добавить префикс
+                        message.audio.file_unique_id) + '_' + short_file_name
 
                 now = datetime.now()
-                print('|'.join([f'{now.hour}:{now.minute}:{now.second}',
-                                'saving',
-                                str(message.from_user.id),
-                                message.audio.file_name,
-                                message.audio.mime_type,
-                                str(message.audio.duration),
-                                str(message.audio.file_size),
-                                short_file_name]))
+                lst = [str(x).strip() for x in
+                       [f'{now.hour}:{now.minute}:{now.second}',
+                        'START SAVING',
+                        message.from_user.id,
+                        message.audio.file_name,
+                        message.audio.mime_type,
+                        message.audio.duration,
+                        message.audio.file_size,
+                        short_file_name] if x]
+                print('|'.join(lst))
+
                 await save_file_if_not_exists(short_file_name, message)
 
                 file_data = FilesData()
@@ -161,9 +167,11 @@ async def _(_, message: Message):
 
 
 async def check_all_audio_data_chats_history():
+    user_id = 0
     try:
         with (Session(autoflush=False, bind=engine) as db):
-            user_ids = [r.user_id for r in db.query(FilesData.user_id).distinct().all()]
+            user_ids = [r.user_id for r in db.query(
+                FilesData.user_id).distinct().all()]
 
         for user_id in user_ids:
             async for m in bot.get_chat_history(user_id):
@@ -171,6 +179,7 @@ async def check_all_audio_data_chats_history():
             print(f'chat_history checked: {user_id}')
     except Exception as e:
         print(f'chat_history error: {user_id}: {e}')
+
 
 async def main():
     await bot.start()
