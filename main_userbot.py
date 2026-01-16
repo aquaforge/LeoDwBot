@@ -144,27 +144,27 @@ async def save_if_audio(message: Message):
         await bot.send_message("me", s)
 
 
-@bot.on_message(filters.incoming & filters.private & (filters.command("info") | filters.text))
-async def _(_, message: Message):
-    if not (bool(message.text) and message.text.lower() in ['/info', 'info']):
-        print(f'message.text="{message.text}" : {message.chat.full_name}')
-        return
+# @bot.on_message(filters.incoming & filters.private & (filters.command("info") | filters.text))
+# async def _(_, message: Message):
+#     if not (bool(message.text) and message.text.lower() in ['/info', 'info']):
+#         print(f'message.text="{message.text}" : {message.chat.full_name}')
+#         return
 
-    with (Session(autoflush=False, bind=engine) as db):
-        if message.chat.full_name != 'Ivan G':
-            print(f'WRONG CHAT {message.chat.full_name}')
-            return
+#     with (Session(autoflush=False, bind=engine) as db):
+#         if message.chat.full_name != 'Ivan G':
+#             print(f'WRONG CHAT {message.chat.full_name}')
+#             return
 
-        records = db.query(FilesData.short_file_name) \
-            .where(FilesData.user_id == message.from_user.id) \
-            .order_by(desc(FilesData.created_at))
+#         records = db.query(FilesData.short_file_name) \
+#             .where(FilesData.user_id == message.from_user.id) \
+#             .order_by(desc(FilesData.created_at))
 
-        files = [r.short_file_name for r in records]
-        if not files:
-            await message.reply("No files", quote=True)
-        else:
-            large_text = f'Files ({len(files)}):\n{"\n".join(files)}'
-            await message.reply(large_text[:3000], quote=True)
+#         files = [r.short_file_name for r in records]
+#         if not files:
+#             await message.reply("No files", quote=True)
+#         else:
+#             large_text = f'Files ({len(files)}):\n{"\n".join(files)}'
+#             await message.reply(large_text[:3000], quote=True)
 
 
 async def check_all_audio_data_chats_history():
