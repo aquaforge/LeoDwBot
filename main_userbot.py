@@ -135,12 +135,13 @@ async def save_if_audio(message: Message):
                 file_data.short_file_name = short_file_name
                 db.add(file_data)
                 db.commit()
-
                 await message.reply(f'saved: "{short_file_name}"', quote=True)
 
     except Exception as e:
         print(e)
-        await message.reply(f'ERROR\n{e}', quote=True)
+        s=f'ERROR\n{e}'
+        await message.reply(s, quote=True)
+        await bot.send_message("me", s)
 
 
 @bot.on_message(filters.incoming & filters.private & (filters.command("info") | filters.text))
@@ -188,6 +189,7 @@ async def main():
     await bot.send_message("me", "Started. UserBot")
     print('\n(Press Ctrl+C to stop this)')
     await check_all_audio_data_chats_history()
+    print ('IDLE')
     await idle()
     await bot.stop()
 
